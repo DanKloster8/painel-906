@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Painel de Embarques — CTC 906</title>
+<style>
+  :root{
+    --bg:#0e1116; --panel:#161b22; --panel-2:#1c232d; --line:#262f3b;
+    --ink:#e6edf3; --ink-dim:#9aa7b4; --ink-faint:#647082;
+    --accent:#ff5a1f;        /* laranja rodonaves */
+    --accent-soft:#ff5a1f22;
+    --ok:#2ea043; --ok-soft:#2ea04322;
+    --wait:#d29922; --wait-soft:#d2992222;
+    --lost:#f85149; --lost-soft:#f8514922;
+    --idle:#8b949e; --idle-soft:#8b949e22;
+    --radius:10px;
+    --font:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+    --mono:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--font);font-size:14px;line-height:1.45}
+  a{color:var(--accent)}
+  .wrap{max-width:1280px;margin:0 auto;padding:20px 24px 64px}
+
+  /* header */
+  header.top{display:flex;align-items:center;gap:16px;border-bottom:1px solid var(--line);padding-bottom:16px;margin-bottom:20px;flex-wrap:wrap}
+  .logo{font-family:var(--mono);font-weight:700;letter-spacing:.5px;font-size:18px;display:flex;align-items:center;gap:10px}
+  .logo .mark{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:8px;background:var(--accent);color:#0e1116;font-weight:800}
+  .logo small{display:block;font-family:var(--font);font-weight:500;font-size:11px;color:var(--ink-dim);letter-spacing:.3px;margin-top:2px}
+  header.top .spacer{flex:1}
+  .badge{font-family:var(--mono);font-size:11px;color:var(--ink-dim);border:1px solid var(--line);border-radius:999px;padding:5px 11px}
+
+  /* controls bar */
+  .controls{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:14px 16px;display:flex;gap:18px;flex-wrap:wrap;align-items:flex-end;margin-bottom:20px}
+  .field{display:flex;flex-direction:column;gap:5px}
+  .field label{font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--ink-faint);font-weight:600}
+  .field input[type=date],.field select,.btn{background:var(--panel-2);border:1px solid var(--line);color:var(--ink);border-radius:7px;padding:8px 11px;font-size:13px;font-family:var(--font)}
+  .field input[type=date]{color-scheme:dark}
+  .btn{cursor:pointer;display:inline-flex;align-items:center;gap:7px;transition:.15s}
+  .btn:hover{border-color:var(--accent);color:#fff}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:#0e1116;font-weight:700}
+  .btn.primary:hover{filter:brightness(1.08)}
+  .btn.ghost:hover{background:var(--panel-2)}
+  .filehint{font-size:11px;color:var(--ink-faint);margin-top:4px}
+  .window-note{font-size:11px;color:var(--ink-dim);flex-basis:100%;border-top:1px dashed var(--line);padding-top:10px;margin-top:2px}
+  .window-note b{color:var(--accent)}
+
+  /* empty / loading */
+  .empty{border:1px dashed var(--line);border-radius:var(--radius);padding:48px 24px;text-align:center;color:var(--ink-dim)}
+  .empty h2{color:var(--ink);font-weight:600;margin:0 0 8px}
+  .empty .drop{margin-top:18px}
+
+  /* kpi cards */
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin-bottom:22px}
+  .kpi{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:16px 18px;position:relative;overflow:hidden}
+  .kpi .strip{position:absolute;left:0;top:0;bottom:0;width:4px}
+  .kpi .lab{font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--ink-faint);font-weight:600}
+  .kpi .num{font-family:var(--mono);font-size:30px;font-weight:700;margin-top:6px;line-height:1}
+  .kpi .sub{font-size:11px;color:var(--ink-dim);margin-top:6px}
+  .kpi.total .strip{background:var(--accent)}
+  .kpi.ship  .strip{background:var(--ok)}
+  .kpi.wait  .strip{background:var(--wait)}
+  .kpi.lost  .strip{background:var(--lost)}
+  .kpi.idle  .strip{background:var(--idle)}
+
+  /* layout grid */
+  .grid{display:grid;grid-template-columns:1.3fr 1fr;gap:18px;margin-bottom:18px}
+  @media(max-width:880px){.grid{grid-template-columns:1fr}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:16px 18px}
+  .card h3{margin:0 0 14px;font-size:13px;text-transform:uppercase;letter-spacing:.7px;color:var(--ink-dim);font-weight:600;display:flex;justify-content:space-between;align-items:center}
+  .card h3 .c{font-family:var(--mono);color:var(--ink-faint);font-size:11px}
+
+  /* status filter pills */
+  .pills{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px}
+  .pill{cursor:pointer;user-select:none;border:1px solid var(--line);border-radius:999px;padding:6px 13px;font-size:12px;color:var(--ink-dim);display:flex;align-items:center;gap:7px;transition:.15s}
+  .pill .dot{width:8px;height:8px;border-radius:50%}
+  .pill.on{color:var(--ink);background:var(--panel-2)}
+  .pill[data-k=EMBARCADO] .dot{background:var(--ok)}
+  .pill[data-k="AINDA NAO EMBARCADO"] .dot{background:var(--wait)}
+  .pill[data-k=EXTRAVIADO] .dot{background:var(--lost)}
+  .pill[data-k="SEM MOVIMENTACAO"] .dot{background:var(--idle)}
+  .pill.off{opacity:.4}
+
+  /* bars */
+  .bar-row{display:grid;grid-template-columns:64px 1fr 56px;align-items:center;gap:10px;margin-bottom:9px}
+  .bar-row .k{font-family:var(--mono);font-size:12px;color:var(--ink-dim)}
+  .bar-track{height:18px;background:var(--panel-2);border-radius:5px;overflow:hidden}
+  .bar-fill{height:100%;border-radius:5px}
+  .bar-row .v{font-family:var(--mono);font-size:12px;text-align:right;color:var(--ink)}
+
+  /* donut */
+  .donut-wrap{display:flex;align-items:center;gap:20px;flex-wrap:wrap}
+  .legend{display:flex;flex-direction:column;gap:8px;font-size:13px}
+  .legend .li{display:flex;align-items:center;gap:9px}
+  .legend .sw{width:11px;height:11px;border-radius:3px}
+  .legend .lv{font-family:var(--mono);color:var(--ink-dim);margin-left:auto}
+
+  /* table */
+  .tablecard{margin-top:18px}
+  .tbl-head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+  .search{background:var(--panel-2);border:1px solid var(--line);border-radius:7px;padding:8px 11px;color:var(--ink);font-size:13px;min-width:240px}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  thead th{position:sticky;top:0;background:var(--panel);text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--ink-faint);font-weight:600;padding:9px 10px;border-bottom:1px solid var(--line);cursor:pointer;white-space:nowrap}
+  thead th:hover{color:var(--ink)}
+  tbody td{padding:8px 10px;border-bottom:1px solid #1d2530}
+  tbody tr:hover{background:#1a212b}
+  td.mono{font-family:var(--mono);color:var(--ink-dim)}
+  td.razao{max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .tag{font-size:11px;font-weight:600;padding:3px 9px;border-radius:999px;white-space:nowrap}
+  .tag.EMBARCADO{background:var(--ok-soft);color:#4ac26b}
+  .tag[data-k="AINDA NAO EMBARCADO"]{background:var(--wait-soft);color:#e3b341}
+  .tag.EXTRAVIADO{background:var(--lost-soft);color:#ff7b72}
+  .tag[data-k="SEM MOVIMENTACAO"]{background:var(--idle-soft);color:#b3bcc6}
+  .scrollbox{max-height:520px;overflow:auto;border:1px solid var(--line);border-radius:var(--radius)}
+  .tfoot{font-size:12px;color:var(--ink-faint);margin-top:10px;display:flex;justify-content:space-between}
+
+  /* foto do dia modal */
+  .overlay{position:fixed;inset:0;background:#000a;display:none;align-items:center;justify-content:center;z-index:50;padding:24px}
+  .overlay.on{display:flex}
+  .snap{background:var(--panel);border:1px solid var(--line);border-radius:14px;max-width:560px;width:100%;padding:0;overflow:hidden}
+  .snap .snaphead{background:linear-gradient(135deg,var(--accent),#c9410f);padding:18px 22px;color:#0e1116}
+  .snap .snaphead h2{margin:0;font-size:18px}
+  .snap .snaphead .when{font-family:var(--mono);font-size:12px;opacity:.85;margin-top:3px}
+  .snap .snapbody{padding:20px 22px}
+  .snap .srow{display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--line);font-size:14px}
+  .snap .srow:last-child{border-bottom:none}
+  .snap .srow b{font-family:var(--mono)}
+  .snap .snapfoot{padding:14px 22px;display:flex;justify-content:flex-end;gap:10px;border-top:1px solid var(--line)}
+  .muted{color:var(--ink-faint)}
+  footer.foot{margin-top:30px;text-align:center;color:var(--ink-faint);font-size:11px;font-family:var(--mono)}
+  .hidden{display:none !important}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="top">
+    <div class="logo">
+      <span class="mark">R</span>
+      <span>RODONAVES
+        <small>Transportes &amp; Encomendas</small>
+      </span>
+    </div>
+    <div class="spacer"></div>
+    <span class="badge" id="badgeArmazem">ARMAZÉM 906</span>
+    <span class="badge" id="badgeBase">SEM BASE CARREGADA</span>
+  </header>
+
+  <!-- controls -->
+  <div class="controls">
+    <div class="field">
+      <label>Base de dados (CSV)</label>
+      <button class="btn ghost" onclick="document.getElementById('file').click()">📂 Carregar planilha</button>
+      <input type="file" id="file" accept=".csv" class="hidden" />
+      <span class="filehint" id="fileName">Nenhum arquivo selecionado</span>
+    </div>
+    <div class="field">
+      <label>Dia de emissão</label>
+      <input type="date" id="dia" />
+    </div>
+    <div class="field">
+      <label>Armazém (UNA)</label>
+      <select id="armazem"><option value="906">906</option></select>
+    </div>
+    <div class="field">
+      <button class="btn primary" id="btnFoto">📸 Foto do dia</button>
+    </div>
+    <div class="field">
+      <button class="btn ghost" id="btnLimpar">↺ Limpar filtros</button>
+    </div>
+    <div class="window-note">
+      Janela operacional: cada dia de emissão aplica o período de <b>13h do dia anterior</b> até <b>13h do dia selecionado</b>.
+      Sem dia selecionado, exibe a base inteira.
+    </div>
+  </div>
+
+  <!-- empty state -->
+  <div class="empty" id="empty">
+    <h2>Sem base carregada</h2>
+    <p>Carregue um arquivo <code>Embarque_*.csv</code> (separado por <code>;</code>) para montar o painel.<br>
+       Os dados são processados localmente no seu navegador — nada é enviado a servidores.</p>
+    <div class="drop">
+      <button class="btn primary" onclick="document.getElementById('file').click()">Selecionar arquivo CSV</button>
+    </div>
+  </div>
+
+  <!-- dashboard -->
+  <div id="dash" class="hidden">
+
+    <div class="kpis" id="kpis"></div>
+
+    <div class="pills" id="pills">
+      <span class="pill on" data-k="EMBARCADO"><span class="dot"></span>Embarcado</span>
+      <span class="pill on" data-k="AINDA NAO EMBARCADO"><span class="dot"></span>Ainda não embarcado</span>
+      <span class="pill on" data-k="EXTRAVIADO"><span class="dot"></span>Extraviado</span>
+      <span class="pill on" data-k="SEM MOVIMENTACAO"><span class="dot"></span>Sem movimentação</span>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <h3>Top destinos (UND DESTIN) <span class="c" id="destCount"></span></h3>
+        <div id="destBars"></div>
+      </div>
+      <div class="card">
+        <h3>Composição por status</h3>
+        <div class="donut-wrap">
+          <svg id="donut" width="160" height="160" viewBox="0 0 160 160"></svg>
+          <div class="legend" id="legend"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card tablecard">
+      <div class="tbl-head">
+        <h3 style="margin:0">Protocolos <span class="c" id="rowCount"></span></h3>
+        <input class="search" id="search" placeholder="Buscar protocolo, tomador, destino…" />
+      </div>
+      <div class="scrollbox">
+        <table id="table">
+          <thead>
+            <tr>
+              <th data-s="DT">Emissão</th>
+              <th data-s="PROTOCOLO">Protocolo</th>
+              <th data-s="RAZAO">Razão social</th>
+              <th data-s="ORIGEM">Origem</th>
+              <th data-s="DESTIN">Destino</th>
+              <th data-s="VOL">Vol.</th>
+              <th data-s="STATUS">Status</th>
+            </tr>
+          </thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </div>
+      <div class="tfoot">
+        <span id="footInfo"></span>
+        <span class="muted">Clique nos cabeçalhos para ordenar</span>
+      </div>
+    </div>
+  </div>
+
+  <footer class="foot">Dashboard de Embarques · Armazém 906 · processamento 100% local</footer>
+</div>
+
+<!-- foto do dia -->
+<div class="overlay" id="overlay">
+  <div class="snap">
+    <div class="snaphead">
+      <h2>📸 Foto do dia</h2>
+      <div class="when" id="snapWhen"></div>
+    </div>
+    <div class="snapbody" id="snapBody"></div>
+    <div class="snapfoot">
+      <button class="btn ghost" id="snapCopy">Copiar resumo</button>
+      <button class="btn primary" id="snapClose">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ---------- estado ---------- */
+let RAW = [];                 // todas as linhas parseadas
+const STATUS = ["EMBARCADO","AINDA NAO EMBARCADO","EXTRAVIADO","SEM MOVIMENTACAO"];
+const STATUS_LABEL = {
+  "EMBARCADO":"Embarcado",
+  "AINDA NAO EMBARCADO":"Ainda não embarcado",
+  "EXTRAVIADO":"Extraviado",
+  "SEM MOVIMENTACAO":"Sem movimentação"
+};
+const COLOR = {
+  "EMBARCADO":"#2ea043",
+  "AINDA NAO EMBARCADO":"#d29922",
+  "EXTRAVIADO":"#f85149",
+  "SEM MOVIMENTACAO":"#8b949e"
+};
+let activeStatus = new Set(STATUS);
+let sortKey = "DT", sortDir = -1;
+let searchTerm = "";
+
+/* ---------- parse CSV (; , BOM, CRLF) ---------- */
+function parseCSV(text){
+  text = text.replace(/^\uFEFF/,'');
+  const lines = text.split(/\r?\n/).filter(l=>l.trim().length);
+  const header = lines[0].split(';').map(h=>h.trim());
+  const idx = {};
+  header.forEach((h,i)=>idx[h]=i);
+  const rows = [];
+  for(let i=1;i<lines.length;i++){
+    const c = lines[i].split(';');
+    if(c.length < header.length) continue;
+    const dt = parseDate(c[idx['DATEMI']]);
+    rows.push({
+      DATEMI: c[idx['DATEMI']],
+      DT: dt,
+      PROTOCOLO: c[idx['PROTOCOLO']],
+      TOMADOR: c[idx['TOMADOR']],
+      RAZAO: c[idx['RAZAO SOCIAL']],
+      ORIGEM: c[idx['UNO ORIGEM']],
+      DESTIN: c[idx['UND DESTIN']],
+      ARMAZEM: c[idx['UNA ARMAZEM']],
+      VOL: parseInt(c[idx['QTDE. VOLUMES']]||'0',10)||0,
+      STATUS: (c[idx['STATUS OPERACAO']]||'').trim().toUpperCase()
+    });
+  }
+  return rows;
+}
+function parseDate(s){
+  // "20/06/2026 17:43"
+  if(!s) return null;
+  const m = s.trim().match(/(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2})/);
+  if(!m) return null;
+  return new Date(+m[3], +m[2]-1, +m[1], +m[4], +m[5]);
+}
+
+/* ---------- janela 13h->13h ---------- */
+function inWindow(dt, diaStr){
+  if(!diaStr) return true;
+  if(!dt) return false;
+  const [y,mo,d] = diaStr.split('-').map(Number);
+  const end   = new Date(y, mo-1, d, 13, 0, 0);          // 13h do dia
+  const start = new Date(end.getTime() - 24*3600*1000);  // 13h do dia anterior
+  return dt >= start && dt < end;
+}
+
+/* ---------- filtro principal ---------- */
+function getFiltered(){
+  const arm = document.getElementById('armazem').value;
+  const dia = document.getElementById('dia').value;
+  return RAW.filter(r =>
+    String(r.ARMAZEM) === String(arm) &&
+    inWindow(r.DT, dia) &&
+    activeStatus.has(r.STATUS)
+  );
+}
+// base do armazém ignorando filtro de status (para KPIs absolutos)
+function getArmazemWindow(){
+  const arm = document.getElementById('armazem').value;
+  const dia = document.getElementById('dia').value;
+  return RAW.filter(r => String(r.ARMAZEM)===String(arm) && inWindow(r.DT,dia));
+}
+
+/* ---------- render ---------- */
+function fmt(n){ return n.toLocaleString('pt-BR'); }
+
+function render(){
+  if(!RAW.length){ return; }
+  document.getElementById('empty').classList.add('hidden');
+  document.getElementById('dash').classList.remove('hidden');
+
+  const base = getArmazemWindow();
+  const rows = getFiltered();
+
+  renderKPIs(base);
+  renderDestBars(rows);
+  renderDonut(base);
+  renderTable(rows);
+}
+
+function renderKPIs(base){
+  const byS = {}; STATUS.forEach(s=>byS[s]={n:0,vol:0});
+  base.forEach(r=>{ if(byS[r.STATUS]){ byS[r.STATUS].n++; byS[r.STATUS].vol+=r.VOL; }});
+  const totalN  = base.length;
+  const totalVol= base.reduce((a,r)=>a+r.VOL,0);
+  const pct = n => totalN? Math.round(n/totalN*100):0;
+
+  const cards = [
+    {cls:'total',lab:'Protocolos',num:fmt(totalN),sub:fmt(totalVol)+' volumes'},
+    {cls:'ship', lab:'Embarcado', num:fmt(byS['EMBARCADO'].n), sub:pct(byS['EMBARCADO'].n)+'% · '+fmt(byS['EMBARCADO'].vol)+' vol'},
+    {cls:'wait', lab:'Não embarcado', num:fmt(byS['AINDA NAO EMBARCADO'].n), sub:pct(byS['AINDA NAO EMBARCADO'].n)+'% · '+fmt(byS['AINDA NAO EMBARCADO'].vol)+' vol'},
+    {cls:'lost', lab:'Extraviado', num:fmt(byS['EXTRAVIADO'].n), sub:pct(byS['EXTRAVIADO'].n)+'% · '+fmt(byS['EXTRAVIADO'].vol)+' vol'},
+    {cls:'idle', lab:'Sem mov.', num:fmt(byS['SEM MOVIMENTACAO'].n), sub:pct(byS['SEM MOVIMENTACAO'].n)+'% · '+fmt(byS['SEM MOVIMENTACAO'].vol)+' vol'},
+  ];
+  document.getElementById('kpis').innerHTML = cards.map(c=>`
+    <div class="kpi ${c.cls}"><span class="strip"></span>
+      <div class="lab">${c.lab}</div>
+      <div class="num">${c.num}</div>
+      <div class="sub">${c.sub}</div>
+    </div>`).join('');
+}
+
+function renderDestBars(rows){
+  const agg = {};
+  rows.forEach(r=>{ agg[r.DESTIN]=(agg[r.DESTIN]||0)+1; });
+  const arr = Object.entries(agg).sort((a,b)=>b[1]-a[1]).slice(0,10);
+  const max = arr.length? arr[0][1]:1;
+  document.getElementById('destCount').textContent = Object.keys(agg).length+' destinos';
+  document.getElementById('destBars').innerHTML = arr.map(([k,v])=>`
+    <div class="bar-row">
+      <span class="k">${k}</span>
+      <div class="bar-track"><div class="bar-fill" style="width:${v/max*100}%;background:linear-gradient(90deg,var(--accent),#ff8a5c)"></div></div>
+      <span class="v">${fmt(v)}</span>
+    </div>`).join('') || '<p class="muted">Sem dados para os filtros atuais.</p>';
+}
+
+function renderDonut(base){
+  const counts = {}; STATUS.forEach(s=>counts[s]=0);
+  base.forEach(r=>{ if(counts[r.STATUS]!=null) counts[r.STATUS]++; });
+  const total = base.length || 1;
+  const svg = document.getElementById('donut');
+  const cx=80,cy=80,r=58,sw=22, C=2*Math.PI*r;
+  let off=0, segs='';
+  STATUS.forEach(s=>{
+    const frac = counts[s]/total;
+    if(frac<=0) return;
+    const len = frac*C;
+    segs += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${COLOR[s]}" stroke-width="${sw}"
+              stroke-dasharray="${len} ${C-len}" stroke-dashoffset="${-off}"
+              transform="rotate(-90 ${cx} ${cy})"/>`;
+    off += len;
+  });
+  svg.innerHTML = `
+    <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="#1c232d" stroke-width="${sw}"/>
+    ${segs}
+    <text x="${cx}" y="${cy-4}" text-anchor="middle" fill="#e6edf3" font-family="var(--mono)" font-size="26" font-weight="700">${fmt(base.length)}</text>
+    <text x="${cx}" y="${cy+16}" text-anchor="middle" fill="#647082" font-size="11">protocolos</text>`;
+
+  document.getElementById('legend').innerHTML = STATUS.map(s=>`
+    <div class="li"><span class="sw" style="background:${COLOR[s]}"></span>${STATUS_LABEL[s]}
+      <span class="lv">${fmt(counts[s])} · ${Math.round(counts[s]/total*100)}%</span></div>`).join('');
+}
+
+function renderTable(rows){
+  // busca
+  let data = rows;
+  if(searchTerm){
+    const t = searchTerm.toLowerCase();
+    data = data.filter(r =>
+      String(r.PROTOCOLO).toLowerCase().includes(t) ||
+      (r.RAZAO||'').toLowerCase().includes(t) ||
+      String(r.DESTIN).includes(t) ||
+      (r.STATUS||'').toLowerCase().includes(t)
+    );
+  }
+  // sort
+  data = data.slice().sort((a,b)=>{
+    let A=a[sortKey], B=b[sortKey];
+    if(sortKey==='DT'){ A=a.DT?a.DT.getTime():0; B=b.DT?b.DT.getTime():0; }
+    if(sortKey==='VOL'){ A=a.VOL; B=b.VOL; }
+    if(A<B) return -1*sortDir; if(A>B) return 1*sortDir; return 0;
+  });
+
+  const cap = 500;
+  const show = data.slice(0,cap);
+  document.getElementById('tbody').innerHTML = show.map(r=>`
+    <tr>
+      <td class="mono">${r.DATEMI||''}</td>
+      <td class="mono">${r.PROTOCOLO}</td>
+      <td class="razao" title="${(r.RAZAO||'').replace(/"/g,'')}">${r.RAZAO||''}</td>
+      <td class="mono">${r.ORIGEM}</td>
+      <td class="mono">${r.DESTIN}</td>
+      <td class="mono">${r.VOL}</td>
+      <td><span class="tag ${cssClass(r.STATUS)}" data-k="${r.STATUS}">${STATUS_LABEL[r.STATUS]||r.STATUS}</span></td>
+    </tr>`).join('');
+  document.getElementById('rowCount').textContent = fmt(data.length)+' registros';
+  document.getElementById('footInfo').textContent =
+    data.length>cap ? `Mostrando ${cap} de ${fmt(data.length)} — refine a busca para ver mais` : `${fmt(data.length)} registros`;
+}
+function cssClass(s){ return s; } // classe = status; espaços tratados via [data-k] no CSS
+
+/* ---------- foto do dia ---------- */
+function fotoDoDia(){
+  const dia = document.getElementById('dia').value;
+  const arm = document.getElementById('armazem').value;
+  const base = getArmazemWindow();
+  const byS = {}; STATUS.forEach(s=>byS[s]={n:0,vol:0});
+  base.forEach(r=>{ if(byS[r.STATUS]){byS[r.STATUS].n++; byS[r.STATUS].vol+=r.VOL;} });
+  const totN = base.length, totV = base.reduce((a,r)=>a+r.VOL,0);
+  const pct = n => totN?Math.round(n/totN*100):0;
+
+  const when = dia
+    ? `Janela ${fmtDia(dia,-1)} 13h → ${fmtDia(dia,0)} 13h · Armazém ${arm}`
+    : `Base completa · Armazém ${arm}`;
+  document.getElementById('snapWhen').textContent = when;
+
+  const rowsHtml = [
+    ['Protocolos', fmt(totN), fmt(totV)+' vol'],
+    ['Embarcado', fmt(byS['EMBARCADO'].n)+` (${pct(byS['EMBARCADO'].n)}%)`, fmt(byS['EMBARCADO'].vol)+' vol'],
+    ['Ainda não embarcado', fmt(byS['AINDA NAO EMBARCADO'].n)+` (${pct(byS['AINDA NAO EMBARCADO'].n)}%)`, fmt(byS['AINDA NAO EMBARCADO'].vol)+' vol'],
+    ['Extraviado', fmt(byS['EXTRAVIADO'].n)+` (${pct(byS['EXTRAVIADO'].n)}%)`, fmt(byS['EXTRAVIADO'].vol)+' vol'],
+    ['Sem movimentação', fmt(byS['SEM MOVIMENTACAO'].n)+` (${pct(byS['SEM MOVIMENTACAO'].n)}%)`, fmt(byS['SEM MOVIMENTACAO'].vol)+' vol'],
+  ];
+  document.getElementById('snapBody').innerHTML = rowsHtml.map(r=>`
+    <div class="srow"><span>${r[0]}</span><span><b>${r[1]}</b> <span class="muted">${r[2]}</span></span></div>`).join('');
+
+  // texto para copiar
+  window.__snapText = `FOTO DO DIA — ${when}\n` + rowsHtml.map(r=>`${r[0]}: ${r[1]} | ${r[2]}`).join('\n');
+  document.getElementById('overlay').classList.add('on');
+}
+function fmtDia(diaStr,deltaDays){
+  const [y,mo,d]=diaStr.split('-').map(Number);
+  const dt=new Date(y,mo-1,d+deltaDays);
+  return String(dt.getDate()).padStart(2,'0')+'/'+String(dt.getMonth()+1).padStart(2,'0');
+}
+
+/* ---------- eventos ---------- */
+document.getElementById('file').addEventListener('change', e=>{
+  const f = e.target.files[0]; if(!f) return;
+  document.getElementById('fileName').textContent = f.name;
+  document.getElementById('badgeBase').textContent = 'BASE: '+f.name;
+  const rd = new FileReader();
+  rd.onload = ev=>{
+    RAW = parseCSV(ev.target.result);
+    // popular armazéns disponíveis
+    const arms = [...new Set(RAW.map(r=>String(r.ARMAZEM)))].sort((a,b)=>a-b);
+    const sel = document.getElementById('armazem');
+    sel.innerHTML = arms.map(a=>`<option value="${a}" ${a==='906'?'selected':''}>${a}</option>`).join('');
+    // dia default = maior data da base
+    const maxDt = RAW.reduce((m,r)=> r.DT && (!m||r.DT>m)?r.DT:m, null);
+    if(maxDt){
+      const ds = maxDt.getFullYear()+'-'+String(maxDt.getMonth()+1).padStart(2,'0')+'-'+String(maxDt.getDate()).padStart(2,'0');
+      document.getElementById('dia').value = ds;
+    }
+    render();
+  };
+  rd.readAsText(f,'UTF-8');
+});
+document.getElementById('dia').addEventListener('change', render);
+document.getElementById('armazem').addEventListener('change', render);
+document.getElementById('btnLimpar').addEventListener('click', ()=>{
+  document.getElementById('dia').value='';
+  searchTerm=''; document.getElementById('search').value='';
+  activeStatus = new Set(STATUS);
+  document.querySelectorAll('.pill').forEach(p=>{p.classList.add('on');p.classList.remove('off');});
+  render();
+});
+document.getElementById('pills').addEventListener('click', e=>{
+  const pill = e.target.closest('.pill'); if(!pill) return;
+  const k = pill.dataset.k;
+  if(activeStatus.has(k)){ activeStatus.delete(k); pill.classList.add('off'); pill.classList.remove('on'); }
+  else { activeStatus.add(k); pill.classList.remove('off'); pill.classList.add('on'); }
+  render();
+});
+document.getElementById('search').addEventListener('input', e=>{ searchTerm=e.target.value; renderTable(getFiltered()); });
+document.querySelectorAll('thead th').forEach(th=>{
+  th.addEventListener('click', ()=>{
+    const k = th.dataset.s;
+    if(sortKey===k) sortDir*=-1; else { sortKey=k; sortDir=1; }
+    renderTable(getFiltered());
+  });
+});
+document.getElementById('btnFoto').addEventListener('click', fotoDoDia);
+document.getElementById('snapClose').addEventListener('click', ()=>document.getElementById('overlay').classList.remove('on'));
+document.getElementById('overlay').addEventListener('click', e=>{ if(e.target.id==='overlay') e.currentTarget.classList.remove('on'); });
+document.getElementById('snapCopy').addEventListener('click', ()=>{
+  navigator.clipboard.writeText(window.__snapText||'').then(()=>{
+    document.getElementById('snapCopy').textContent='Copiado ✓';
+    setTimeout(()=>document.getElementById('snapCopy').textContent='Copiar resumo',1500);
+  });
+});
+</script>
+</body>
+</html>
