@@ -75,8 +75,9 @@
   .empty h2{color:var(--ink);margin:0 0 8px}
 
   /* ===== KPI ===== */
-  .kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin:14px 0}
-  @media(max-width:1000px){.kpis{grid-template-columns:repeat(2,1fr)}}
+  .kpis{display:grid;grid-template-columns:repeat(6,1fr);gap:12px;margin:14px 0}
+  @media(max-width:1100px){.kpis{grid-template-columns:repeat(3,1fr)}}
+  @media(max-width:680px){.kpis{grid-template-columns:repeat(2,1fr)}}
   .kpi{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:15px 17px;box-shadow:0 1px 2px #0b1c4408}
   .kpi .lab{font-size:10px;letter-spacing:.7px;font-weight:700;color:var(--ink-3);text-transform:uppercase}
   .kpi .num{font-size:30px;font-weight:800;margin-top:6px;line-height:1}
@@ -540,6 +541,7 @@ function renderKPIs(rows){
   const p=n=>a.total?Math.round(n/a.total*1000)/10:0;
   document.getElementById('kpis').innerHTML=`
     <div class="kpi ship"><div class="lab">% Embarcado</div><div class="num">${p(a.emb).toLocaleString('pt-BR')}%</div><div class="sub">% embarcado por registros</div></div>
+    <div class="kpi ship"><div class="lab">Embarcado</div><div class="num">${fmt(a.emb)}</div><div class="sub">Registros embarcados</div></div>
     <div class="kpi ship2"><div class="lab">Total Embarques</div><div class="num">${fmt(a.total)}</div><div class="sub">${fmt(protos)} protocolos</div></div>
     <div class="kpi wait"><div class="lab">Não Embarcado</div><div class="num">${fmt(a.nao)}</div><div class="sub">Registros não embarcados</div></div>
     <div class="kpi lost"><div class="lab">Extraviado</div><div class="num">${fmt(a.ext)}</div><div class="sub">Registros extraviados</div></div>
