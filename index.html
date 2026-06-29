@@ -540,12 +540,12 @@ function renderKPIs(rows){
   const protos=new Set(rows.map(r=>r.PROTOCOLO)).size;
   const p=n=>a.total?Math.round(n/a.total*1000)/10:0;
   document.getElementById('kpis').innerHTML=`
-    <div class="kpi ship"><div class="lab">% Embarcado</div><div class="num">${p(a.emb).toLocaleString('pt-BR')}%</div><div class="sub">% embarcado por registros</div></div>
-    <div class="kpi ship"><div class="lab">Embarcado</div><div class="num">${fmt(a.emb)}</div><div class="sub">Registros embarcados</div></div>
     <div class="kpi ship2"><div class="lab">Total Embarques</div><div class="num">${fmt(a.total)}</div><div class="sub">${fmt(protos)} protocolos</div></div>
+    <div class="kpi ship"><div class="lab">Embarcado</div><div class="num">${fmt(a.emb)}</div><div class="sub">Registros embarcados</div></div>
     <div class="kpi wait"><div class="lab">Não Embarcado</div><div class="num">${fmt(a.nao)}</div><div class="sub">Registros não embarcados</div></div>
     <div class="kpi lost"><div class="lab">Extraviado</div><div class="num">${fmt(a.ext)}</div><div class="sub">Registros extraviados</div></div>
-    <div class="kpi idle"><div class="lab">Sem Movimentação</div><div class="num">${fmt(a.sem)}</div><div class="sub">Sem ação operacional</div></div>`;
+    <div class="kpi idle"><div class="lab">Sem Movimentação</div><div class="num">${fmt(a.sem)}</div><div class="sub">Sem ação operacional</div></div>
+    <div class="kpi ship"><div class="lab">% Embarcado</div><div class="num">${p(a.emb).toLocaleString('pt-BR')}%</div><div class="sub">% embarcado por registros</div></div>`;
 }
 
 function renderDonut(rows){
