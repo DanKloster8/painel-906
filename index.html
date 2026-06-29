@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Controle de Embarques — CTC 906</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<!-- Base publicada pelo administrador (opcional). Se o arquivo não existir, o site funciona normalmente. -->
+<script src="dados.js" onerror="console.info('dados.js ausente — modo admin sobe a base manualmente')"></script>
 <style>
   :root{
     --bg:#0d1117; --card:#161b22; --line:#283040; --line-soft:#202836;
@@ -24,6 +26,16 @@
   html,body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--font);font-size:14px;line-height:1.45}
   .wrap{max-width:1340px;margin:0 auto;padding:18px 20px 70px}
   .hidden{display:none !important}
+  /* modos: body.mode-leitor esconde .admin-only ; body.mode-admin esconde .leitor-only */
+  body.mode-leitor .admin-only{display:none !important}
+  body.mode-admin  .leitor-only{display:none !important}
+  .modebar{max-width:1340px;margin:0 auto 14px;padding:0 20px}
+  .modebar .inner{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:8px 14px;font-size:12px;color:var(--ink-2);display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .modebar .pill{font-size:10px;letter-spacing:1px;font-weight:700;padding:3px 10px;border-radius:999px}
+  .modebar .pill.adm{background:var(--brand-soft);color:var(--brand)}
+  .modebar .pill.lei{background:var(--ok-soft);color:#4ade80}
+  .modebar a{color:var(--brand);text-decoration:none;font-weight:600}
+  .modebar a:hover{text-decoration:underline}
   .muted{color:var(--ink-3)}
   .mono{font-family:var(--mono)}
 
@@ -187,10 +199,14 @@
         <span class="reg" id="regCount">—</span>
       </div>
       <button class="btn" id="btnLimpar">↺ Limpar filtros</button>
-      <button class="btn" onclick="document.getElementById('file').click()">📂 Trocar base</button>
+      <div class="admin-only" style="display:flex;flex-direction:column;gap:9px;align-items:flex-end">
+        <button class="btn" onclick="document.getElementById('file').click()">📂 Trocar base</button>
+        <button class="btn" id="btnExport" title="Baixa dados.js para publicar a versão do leitor">💾 Gerar versão do leitor</button>
+      </div>
       <input type="file" id="file" accept=".xlsx,.xls,.csv" class="hidden" />
     </div>
   </div>
+  <div class="modebar" id="modebar"></div>
 
   <!-- ===================== FILTROS ===================== -->
   <div class="filtros" id="filtros">
@@ -208,11 +224,16 @@
   </div>
 
   <!-- ===================== EMPTY ===================== -->
-  <div class="empty" id="empty">
+  <div class="empty admin-only" id="emptyAdmin">
     <h2>Sem base carregada</h2>
     <p>Carregue a planilha <code>Embarque_906_*.xlsx</code> (ou o CSV) para montar o painel.<br>
        Processamento 100% local no navegador — nenhum dado é enviado a servidores.</p>
     <p style="margin-top:18px"><button class="btn primary" onclick="document.getElementById('file').click()">Selecionar arquivo</button></p>
+  </div>
+  <div class="empty leitor-only" id="emptyLeitor">
+    <h2>Aguardando publicação</h2>
+    <p>Ainda não há base publicada para visualização.<br>
+       Quando o administrador publicar a base, os resultados aparecerão aqui automaticamente.</p>
   </div>
 
   <!-- ===================== DASHBOARD ===================== -->
@@ -498,7 +519,8 @@ function groupBy(rows,keyFn){
 /* ===================== RENDER ===================== */
 function render(){
   if(!RAW.length) return;
-  document.getElementById('empty').classList.add('hidden');
+  document.getElementById('emptyAdmin').classList.add('hidden');
+  document.getElementById('emptyLeitor').classList.add('hidden');
   document.getElementById('dash').classList.remove('hidden');
   const b=base(), f=filtered();
   document.getElementById('regCount').textContent=fmt(f.length)+' reg.';
@@ -671,25 +693,45 @@ function foto(){
 function diaFmt(dia,delta){ const [y,m,d]=dia.split('-').map(Number); const dt=new Date(y,m-1,d+delta); return String(dt.getDate()).padStart(2,'0')+'/'+String(dt.getMonth()+1).padStart(2,'0'); }
 
 /* ===================== EVENTOS ===================== */
+let META={atualizado:'',base:''};
+function loadRecords(records, baseName, atualizadoStr){
+  RAW = records.filter(r=>!clienteExcluido(r.RAZAO));
+  const arms=uniq(RAW.map(r=>String(r.ARMAZEM))).sort((a,b)=>a-b);
+  const sel=document.getElementById('fArmazem');
+  sel.innerHTML=arms.map(a=>`<option value="${a}" ${a==='906'?'selected':''}>Armazém ${a}</option>`).join('');
+  const maxDt=RAW.reduce((m,r)=>r.DT&&(!m||r.DT>m)?r.DT:m,null);
+  if(maxDt){ document.getElementById('dia').value=maxDt.getFullYear()+'-'+String(maxDt.getMonth()+1).padStart(2,'0')+'-'+String(maxDt.getDate()).padStart(2,'0'); }
+  const upd=atualizadoStr || (maxDt?fmtDT(maxDt):'—');
+  META={atualizado:upd, base:baseName||''};
+  document.getElementById('hmeta').innerHTML=`Atualizado em: ${upd}${baseName?` · Base: ${baseName}`:''} · ${fmt(RAW.length)} registros`;
+  populateFilters(); render();
+}
 document.getElementById('file').addEventListener('change',e=>{
   const file=e.target.files[0]; if(!file) return;
   const isCsv=/\.csv$/i.test(file.name);
   const rd=new FileReader();
   rd.onload=ev=>{
-    RAW = isCsv ? parseCSV(ev.target.result) : parseXLSX(ev.target.result);
-    RAW = RAW.filter(r=>!clienteExcluido(r.RAZAO));
-    // armazéns
-    const arms=uniq(RAW.map(r=>String(r.ARMAZEM))).sort((a,b)=>a-b);
-    const sel=document.getElementById('fArmazem');
-    sel.innerHTML=arms.map(a=>`<option value="${a}" ${a==='906'?'selected':''}>Armazém ${a}</option>`).join('');
-    // dia default = data máxima
-    const maxDt=RAW.reduce((m,r)=>r.DT&&(!m||r.DT>m)?r.DT:m,null);
-    if(maxDt){ document.getElementById('dia').value=maxDt.getFullYear()+'-'+String(maxDt.getMonth()+1).padStart(2,'0')+'-'+String(maxDt.getDate()).padStart(2,'0'); }
-    const upd=maxDt?fmtDT(maxDt):'—';
-    document.getElementById('hmeta').innerHTML=`Atualizado em: ${upd} · Base: ${file.name} · ${fmt(RAW.length)} registros`;
-    populateFilters(); render();
+    const recs = isCsv ? parseCSV(ev.target.result) : parseXLSX(ev.target.result);
+    loadRecords(recs, file.name, fmtDT(new Date()));
   };
   if(isCsv) rd.readAsText(file,'UTF-8'); else rd.readAsArrayBuffer(file);
+});
+
+/* Gera dados.js (planilha embutida) para publicar a versão do leitor */
+function serializeRAW(){
+  // Datas viram ISO para reconstruir no leitor
+  return RAW.map(r=>({...r, DT: r.DT? r.DT.toISOString():null}));
+}
+document.getElementById('btnExport').addEventListener('click',()=>{
+  if(!RAW.length){ alert('Carregue uma planilha antes de gerar a versão do leitor.'); return; }
+  const payload={ atualizado:META.atualizado, base:META.base, registros:serializeRAW() };
+  const js='window.DADOS_EMBUTIDOS = '+JSON.stringify(payload)+';';
+  const blob=new Blob([js],{type:'text/javascript'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a'); a.href=url; a.download='dados.js'; a.click();
+  URL.revokeObjectURL(url);
+  const b=document.getElementById('btnExport'); const t=b.textContent; b.textContent='✓ dados.js baixado';
+  setTimeout(()=>b.textContent=t,2200);
 });
 ['dia','fArmazem'].forEach(id=>document.getElementById(id).addEventListener('change',()=>{populateFilters();render();}));
 ['fCidade','fRota','fOperacao','fUF'].forEach(id=>document.getElementById(id).addEventListener('change',render));
@@ -710,6 +752,30 @@ function bindSort(tblId,stateKey){ document.querySelectorAll('#'+tblId+' thead t
   const k=th.dataset.s, st=sortBy[stateKey]; if(st.k===k)st.d*=-1; else {st.k=k;st.d=k==='key'?1:-1;} render();
 }));}
 bindSort('tblCliente','cliente'); bindSort('tblUF','uf'); bindSort('tblRota','rota'); bindSort('tblProt','prot');
+
+/* ===================== MODO ADMIN / LEITOR ===================== */
+function initMode(){
+  const qs=new URLSearchParams(location.search);
+  const isAdmin = qs.has('admin');                 // …/?admin  → administrador
+  document.body.classList.add(isAdmin?'mode-admin':'mode-leitor');
+  const bar=document.getElementById('modebar');
+  if(isAdmin){
+    bar.innerHTML=`<div class="inner"><span class="pill adm">ADMINISTRADOR</span>
+      <span>Você vê os controles de base. Link do leitor:</span>
+      <a href="${location.pathname}">${location.host}${location.pathname}</a></div>`;
+  }else{
+    bar.innerHTML=`<div class="inner"><span class="pill lei">LEITOR</span>
+      <span>Visualização somente leitura.</span></div>`;
+  }
+  // tenta carregar a base embutida (dados.js publicado pelo admin)
+  if(window.DADOS_EMBUTIDOS && Array.isArray(window.DADOS_EMBUTIDOS.registros)){
+    const d=window.DADOS_EMBUTIDOS;
+    const recs=d.registros.map(r=>({...r, DT: r.DT? new Date(r.DT):null}));
+    loadRecords(recs, d.base||'', d.atualizado||'');
+  }
+}
+initMode();
+
 </script>
 </body>
 </html>
